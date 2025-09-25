@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 
 import userAuthRoutes from "./routes/userAuth.js";
 import adminAuthRoutes from "./routes/adminAuth.js";
+import productRoutes from "./routes/productRoutes.js"; // ✅ new
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use(globalLimiter);
 // Routes
 app.use("/api/auth/user", userAuthRoutes);
 app.use("/api/auth/admin", adminAuthRoutes);
+app.use("/api/products", productRoutes); 
 
 // Health check route
 app.get("/health", (req, res) => {
