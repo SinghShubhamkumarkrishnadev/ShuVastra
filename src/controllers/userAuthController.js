@@ -1,3 +1,4 @@
+//src/controllers/userAuthController.js
 import User from "../models/User.js";
 import Otp from "../models/Otp.js";
 import { generateOtp } from "../utils/generateOtp.js";

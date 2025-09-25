@@ -1,3 +1,4 @@
+//src/routes/userRoutes.js
 import express from "express";
 import { register, verifyOtp, resendOtp, login, getProfile, updateProfile } from "../controllers/userAuthController.js";
 import { authLimiter } from "../middlewares/rateLimit.js";

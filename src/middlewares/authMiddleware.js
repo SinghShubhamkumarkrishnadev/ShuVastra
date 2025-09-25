@@ -1,3 +1,4 @@
+//src/middleware/authMiddleware.js
 import { verifyToken } from "../utils/token.js";
 import User from "../models/User.js";
 import Admin from "../models/Admin.js";

@@ -1,3 +1,4 @@
+//src/models/User.js
 import mongoose from "mongoose";
 import argon2 from "argon2";
 

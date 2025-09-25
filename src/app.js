@@ -1,12 +1,14 @@
+//src/app.js
 import express from "express";
 import morgan from "morgan";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-
 import userAuthRoutes from "./routes/userRoutes.js";
 import adminAuthRoutes from "./routes/adminRoutes.js";
 import productRoutes from "./routes/productRoutes.js"; 
+import cartRoutes from "./routes/cartRoutes.js"; 
+import orderRoutes from "./routes/orderRoutes.js";
 
 const app = express();
 
@@ -27,7 +29,9 @@ app.use(globalLimiter);
 // Routes
 app.use("/api/auth/user", userAuthRoutes);
 app.use("/api/auth/admin", adminAuthRoutes);
-app.use("/api/products", productRoutes); 
+app.use("/api/auth/products", productRoutes); 
+app.use("/api/auth/cart", cartRoutes);
+app.use("/api/auth/orders", orderRoutes);
 
 // Health check route
 app.get("/health", (req, res) => {
