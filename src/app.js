@@ -4,9 +4,9 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
-import userAuthRoutes from "./routes/userAuth.js";
-import adminAuthRoutes from "./routes/adminAuth.js";
-import productRoutes from "./routes/productRoutes.js"; // ✅ new
+import userAuthRoutes from "./routes/userRoutes.js";
+import adminAuthRoutes from "./routes/adminRoutes.js";
+import productRoutes from "./routes/productRoutes.js"; 
 
 const app = express();
 
