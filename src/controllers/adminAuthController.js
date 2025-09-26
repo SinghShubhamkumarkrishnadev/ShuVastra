@@ -1,10 +1,7 @@
 import Admin from "../models/Admin.js";
-import Otp from "../models/Otp.js";
-import { generateOtp } from "../utils/generateOtp.js";
-import { sendEmail } from "../utils/sendEmail.js";
 import { generateToken } from "../utils/token.js";
-import argon2 from "argon2";
 import Joi from "joi";
+import { createOrResendOtp, verifyOtpHelper } from "../utils/otpHelper.js";
 
 /**
  * Admin Login Validation Schema
@@ -20,7 +17,7 @@ const adminLoginSchema = Joi.object({
 });
 
 /**
- * Admin Login Step 1: email + password
+ * Step 1: Admin login with email & password
  */
 export const login = async (req, res) => {
   try {
@@ -35,7 +32,6 @@ export const login = async (req, res) => {
     }
 
     const { email, password } = value;
-
     const admin = await Admin.findOne({ email });
     if (!admin) return res.status(400).json({ message: "Invalid credentials" });
 
@@ -43,25 +39,18 @@ export const login = async (req, res) => {
     if (!validPass)
       return res.status(400).json({ message: "Invalid credentials" });
 
-    // Remove old login OTPs
-    await Otp.deleteMany({ targetEmail: email, purpose: "login" });
-
-    // Generate OTP
-    const otp = generateOtp();
-    const hashedOtp = await argon2.hash(otp);
-
-    await Otp.create({
-      targetEmail: email,
-      hashedOtp,
+    // Create new OTP
+    const { blocked } = await createOrResendOtp({
+      email,
       purpose: "login",
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      username: admin.name,
     });
 
-    await sendEmail(
-      email,
-      "Admin Login OTP",
-      `<p>Your login OTP: <b>${otp}</b></p>`
-    );
+    if (blocked) {
+      return res
+        .status(429)
+        .json({ message: "Too many attempts. Try again later." });
+    }
 
     res.json({ message: "OTP sent to admin email. Please verify." });
   } catch (err) {
@@ -71,29 +60,30 @@ export const login = async (req, res) => {
 };
 
 /**
- * Admin Login Step 2: verify OTP
+ * Step 2: Verify Admin OTP
  */
 export const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
-
     const admin = await Admin.findOne({ email });
     if (!admin) return res.status(400).json({ message: "Admin not found" });
 
-    const otpDoc = await Otp.findOne({ targetEmail: email, purpose: "login" });
-    if (!otpDoc) return res.status(400).json({ message: "OTP not found or expired" });
+    const { valid, attemptsLeft, blocked } = await verifyOtpHelper({
+      email,
+      otp,
+      purpose: "login",
+    });
 
-    const valid = await argon2.verify(otpDoc.hashedOtp, otp);
     if (!valid) {
-      otpDoc.attempts += 1;
-      await otpDoc.save();
-      return res.status(400).json({ message: "Invalid OTP" });
+      if (blocked) {
+        return res.status(429).json({
+          message: "Maximum attempts reached. Please request a new OTP.",
+        });
+      }
+      return res.status(400).json({ message: "Invalid OTP", attemptsLeft });
     }
 
-    await Otp.deleteMany({ targetEmail: email, purpose: "login" });
-
     const token = generateToken({ id: admin._id, role: "admin" });
-
     res.json({ message: "Admin login successful", token, admin });
   } catch (err) {
     console.error("Admin verify OTP error:", err.message);
@@ -110,21 +100,20 @@ export const resendOtp = async (req, res) => {
     const admin = await Admin.findOne({ email });
     if (!admin) return res.status(400).json({ message: "Admin not found" });
 
-    await Otp.deleteMany({ targetEmail: email, purpose: "login" });
-
-    const otp = generateOtp();
-    const hashedOtp = await argon2.hash(otp);
-
-    await Otp.create({
-      targetEmail: email,
-      hashedOtp,
+    const { attemptsLeft, blocked } = await createOrResendOtp({
+      email,
       purpose: "login",
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      username: admin.name,
     });
 
-    await sendEmail(email, "Resend Admin OTP", `<p>Your new OTP: <b>${otp}</b></p>`);
+    if (blocked) {
+      return res.status(429).json({
+        message: "Too many invalid attempts. OTP cannot be resent.",
+        attemptsLeft: 0,
+      });
+    }
 
-    res.json({ message: "OTP resent successfully" });
+    res.json({ message: "OTP resent successfully", attemptsLeft });
   } catch (err) {
     console.error("Resend Admin OTP error:", err.message);
     res.status(500).json({ message: "Server error" });

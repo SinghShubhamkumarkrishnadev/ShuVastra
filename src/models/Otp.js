@@ -2,6 +2,9 @@ import mongoose from "mongoose";
 
 const { Schema, model } = mongoose;
 
+// Max allowed invalid OTP attempts
+const MAX_ATTEMPTS = 5;
+
 /**
  * OTP model for both user registration and admin login.
  * - hashedOtp: store a hashed OTP (you should hash OTP before saving).
@@ -49,6 +52,21 @@ const OtpSchema = new Schema(
  * expireAfterSeconds: 0 means delete exactly at `expiresAt`.
  */
 OtpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+/**
+ * Increment attempts safely and check if max attempts exceeded
+ */
+OtpSchema.methods.incrementAttempts = async function () {
+  this.attempts += 1;
+  await this.save();
+
+  if (this.attempts >= MAX_ATTEMPTS) {
+    // Delete OTP after too many failed attempts
+    await this.deleteOne();
+    return false; // means locked/deleted
+  }
+  return true; // still valid
+};
 
 const Otp = model("Otp", OtpSchema);
 export default Otp;

@@ -1,16 +1,48 @@
-// File: src/routes/orderRoutes.js
+// src/routes/orderRoutes.js
 import express from "express";
-import { createOrder, getMyOrders, getOrderById, updateOrderStatus } from "../controllers/orderController.js";
+import {
+  placeOrder,
+  getUserOrders,
+  getOrderById,
+  adminListOrders,
+  updateOrderStatus,
+  cancelOrder,
+} from "../controllers/orderController.js";
+
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// User routes
-router.post("/", authMiddleware(["user"]), createOrder);
-router.get("/", authMiddleware(["user"]), getMyOrders);
-router.get("/:id", authMiddleware(["user"]), getOrderById);
+/**
+ * User routes — requires logged-in user role
+ */
+router.use(authMiddleware(["user", "admin"])); // both user and admin can place orders (admin for testing)
 
-// Admin route to update order status
-router.put("/:id/status", authMiddleware(["admin"]), updateOrderStatus);
+/**
+ * POST /api/auth/orders  -> place an order (from cart)
+ */
+router.post("/", placeOrder);
+
+/**
+ * GET /api/auth/orders -> list orders for current user (admin can see all by using admin endpoint)
+ */
+router.get("/", getUserOrders);
+
+/**
+ * GET /api/auth/orders/:orderId -> get details
+ */
+router.get("/:orderId", getOrderById);
+
+/**
+ * POST /api/auth/orders/:orderId/cancel -> cancel (user or admin)
+ */
+router.post("/:orderId/cancel", cancelOrder);
+
+/**
+ * Admin-only routes
+ * NOTE: keep admin endpoints under same router; restrict to admin role for these routes
+ */
+router.get("/admin/all", authMiddleware(["admin"]), adminListOrders); // list all orders (admin)
+router.put("/:orderId/status", authMiddleware(["admin"]), updateOrderStatus); // admin update status
 
 export default router;

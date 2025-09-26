@@ -29,9 +29,9 @@ app.use(globalLimiter);
 // Routes
 app.use("/api/auth/user", userAuthRoutes);
 app.use("/api/auth/admin", adminAuthRoutes);
-app.use("/api/auth/products", productRoutes); 
-app.use("/api/auth/cart", cartRoutes);
-app.use("/api/auth/orders", orderRoutes);
+app.use("/api/products", productRoutes); 
+app.use("/api/cart", cartRoutes);
+app.use("/api/orders", orderRoutes);
 
 // Health check route
 app.get("/health", (req, res) => {

@@ -1,3 +1,4 @@
+// src/models/Admin.js
 import mongoose from "mongoose";
 import argon2 from "argon2";
 
@@ -20,27 +21,21 @@ const AdminSchema = new Schema(
     },
     passwordHash: {
       type: String,
-      // no required: true here, since it's set in pre-save
     },
     isVerified: {
       type: Boolean,
-      default: true, // seeded admin will always be verified
+      default: true,
     },
     role: {
       type: String,
-      enum: ["admin", "superadmin"],
+      enum: ["admin"],
       default: "admin",
-    },
-    createdBy: {
-      type: Schema.Types.ObjectId,
-      ref: "Admin",
-      default: null,
     },
   },
   { timestamps: true }
 );
 
-// Virtual password field (not stored in DB)
+// Virtual password (not stored in DB)
 AdminSchema.virtual("password")
   .set(function (password) {
     this._password = password;
@@ -67,12 +62,12 @@ AdminSchema.methods.verifyPassword = async function (plain) {
   if (!this.passwordHash) return false;
   try {
     return await argon2.verify(this.passwordHash, plain);
-  } catch (err) {
+  } catch {
     return false;
   }
 };
 
-// Hide passwordHash in JSON responses
+// Hide sensitive fields in JSON
 AdminSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.passwordHash;

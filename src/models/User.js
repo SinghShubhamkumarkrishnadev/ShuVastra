@@ -13,7 +13,7 @@ const UserSchema = new Schema(
     },
     email: {
       type: String,
-      required: true,
+      required: [true, "Email is required"],
       unique: true,
       lowercase: true,
       trim: true,
@@ -25,6 +25,7 @@ const UserSchema = new Schema(
     phone: {
       type: String,
       trim: true,
+      required: true,
     },
     address: {
       street: { type: String, trim: true },

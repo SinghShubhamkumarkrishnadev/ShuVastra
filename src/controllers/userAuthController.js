@@ -1,53 +1,34 @@
-//src/controllers/userAuthController.js
 import User from "../models/User.js";
-import Otp from "../models/Otp.js";
-import { generateOtp } from "../utils/generateOtp.js";
-import { sendEmail } from "../utils/sendEmail.js";
 import { generateToken } from "../utils/token.js";
 import {
   usernameSchema,
   passwordSchema,
   profileUpdateSchema,
+  phoneSchema,
 } from "../utils/validators.js";
-import argon2 from "argon2";
 import Joi from "joi";
+import { createOrResendOtp, verifyOtpHelper } from "../utils/otpHelper.js";
 
 /**
- * Helper: Send OTP email with proper formatting
+ * Helper: format Mongo duplicate key error
  */
-const sendOtpEmail = async (email, username, otp) => {
-  if (!email || !username || !otp)
-    throw new Error("Missing parameters for sending OTP email");
-
-  const htmlContent = `
-    <p>Hi ${username},</p>
-
-    <p>Thank you for registering on <strong>ShuVastra</strong>! To complete your registration, please use the verification code below:</p>
-
-    <h2 style="color: #2F4F4F;">${otp}</h2>
-
-    <p>This code will expire in 5 minutes. Please do not share it with anyone.</p>
-
-    <p>If you did not create an account with us, please ignore this email.</p>
-
-    <br>
-    <p>Best regards,<br>
-    ShuVastra Team</p>
-  `;
-
-  try {
-    await sendEmail(email, "Verify your ShuVastra Account", htmlContent);
-  } catch (err) {
-    console.error("Email sending failed:", err.message);
-    throw new Error("Failed to send verification email");
+const handleDuplicateKeyError = (err, res) => {
+  if (err.code === 11000) {
+    if (err.keyPattern?.email) {
+      return res.status(409).json({ message: "Email already in use" });
+    }
+    if (err.keyPattern?.phone) {
+      return res.status(409).json({ message: "Phone number already in use" });
+    }
+    return res.status(409).json({ message: "Duplicate value error" });
   }
+  return null; // means not a duplicate key error
 };
 
 /**
  * User Registration
  */
 export const register = async (req, res) => {
-  // Validate input
   const { error, value } = Joi.object({
     username: usernameSchema,
     email: Joi.string().email().required().messages({
@@ -55,6 +36,9 @@ export const register = async (req, res) => {
       "string.empty": "Email is required",
     }),
     password: passwordSchema,
+    phone: phoneSchema.required().messages({
+      "string.empty": "Phone number is required",
+    }),
   }).validate(req.body, { abortEarly: false });
 
   if (error) {
@@ -64,7 +48,7 @@ export const register = async (req, res) => {
     });
   }
 
-  const { username, email, password } = value;
+  const { username, email, password, phone } = value;
 
   try {
     const existing = await User.findOne({ email });
@@ -72,35 +56,34 @@ export const register = async (req, res) => {
       return res.status(409).json({ message: "Email is already registered" });
     }
 
-    const user = new User({
-      username,
-      email,
-      isVerified: false,
-    });
+    const user = new User({ username, email, phone, isVerified: false });
     user.password = password; // virtual setter for hashing
     await user.save();
 
-    const otp = generateOtp();
-    const hashedOtp = await argon2.hash(otp);
-
-    await Otp.create({
-      targetEmail: email,
-      hashedOtp,
+    const { blocked } = await createOrResendOtp({
+      email,
       purpose: "register",
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      username,
     });
 
-    await sendOtpEmail(email, username, otp);
+    if (blocked) {
+      return res.status(429).json({
+        message: "Too many attempts. Try again later.",
+      });
+    }
 
     return res.status(201).json({
       message:
         "User registered successfully. Please check your email for the OTP.",
     });
   } catch (err) {
-    console.error("Register error:", err.message);
+    console.error("Register error:", err);
+
+    if (handleDuplicateKeyError(err, res)) return;
+
     return res
       .status(500)
-      .json({ message: err.message || "Server error during registration" });
+      .json({ message: "Server error during registration" });
   }
 };
 
@@ -116,24 +99,30 @@ export const verifyOtp = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const otpDoc = await Otp.findOne({ targetEmail: email, purpose: "register" });
-    if (!otpDoc) return res.status(404).json({ message: "OTP not found or expired" });
+    const { valid, attemptsLeft, blocked } = await verifyOtpHelper({
+      email,
+      otp,
+      purpose: "register",
+    });
 
-    const isValid = await argon2.verify(otpDoc.hashedOtp, otp);
-    if (!isValid) {
-      otpDoc.attempts += 1;
-      await otpDoc.save();
-      return res.status(400).json({ message: "Invalid OTP" });
+    if (!valid) {
+      if (blocked) {
+        return res.status(429).json({
+          message: "Maximum attempts reached. Please request a new OTP.",
+        });
+      }
+      return res.status(400).json({ message: "Invalid OTP", attemptsLeft });
     }
 
     user.isVerified = true;
     await user.save();
-    await Otp.deleteMany({ targetEmail: email, purpose: "register" });
 
     return res.json({ message: "Account verified successfully" });
   } catch (err) {
-    console.error("Verify OTP error:", err.message);
-    return res.status(500).json({ message: "Server error during OTP verification" });
+    console.error("Verify OTP error:", err);
+    return res
+      .status(500)
+      .json({ message: "Server error during OTP verification" });
   }
 };
 
@@ -147,26 +136,28 @@ export const resendOtp = async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
-    if (user.isVerified) return res.status(400).json({ message: "User already verified" });
+    if (user.isVerified)
+      return res.status(400).json({ message: "User already verified" });
 
-    await Otp.deleteMany({ targetEmail: email, purpose: "register" });
-
-    const otp = generateOtp();
-    const hashedOtp = await argon2.hash(otp);
-
-    await Otp.create({
-      targetEmail: email,
-      hashedOtp,
+    const { attemptsLeft, blocked } = await createOrResendOtp({
+      email,
       purpose: "register",
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      username: user.username,
     });
 
-    await sendOtpEmail(email, user.username, otp);
+    if (blocked) {
+      return res.status(429).json({
+        message: "Too many invalid attempts. OTP cannot be resent.",
+        attemptsLeft: 0,
+      });
+    }
 
-    return res.json({ message: "OTP resent successfully" });
+    return res.json({ message: "OTP resent successfully", attemptsLeft });
   } catch (err) {
-    console.error("Resend OTP error:", err.message);
-    return res.status(500).json({ message: err.message || "Server error during OTP resend" });
+    console.error("Resend OTP error:", err);
+    return res.status(500).json({
+      message: "Server error during OTP resend",
+    });
   }
 };
 
@@ -175,7 +166,6 @@ export const resendOtp = async (req, res) => {
  */
 export const login = async (req, res) => {
   const { email, password } = req.body;
-
   if (!email || !password)
     return res
       .status(400)
@@ -184,16 +174,17 @@ export const login = async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
-    if (!user.isVerified) return res.status(403).json({ message: "Account not verified" });
+    if (!user.isVerified)
+      return res.status(403).json({ message: "Account not verified" });
 
     const validPass = await user.verifyPassword(password);
-    if (!validPass) return res.status(401).json({ message: "Invalid credentials" });
+    if (!validPass)
+      return res.status(401).json({ message: "Invalid credentials" });
 
     const token = generateToken({ id: user._id, role: "user" });
-
     return res.json({ message: "Login successful", token, user });
   } catch (err) {
-    console.error("Login error:", err.message);
+    console.error("Login error:", err);
     return res.status(500).json({ message: "Server error during login" });
   }
 };
@@ -208,17 +199,16 @@ export const getProfile = async (req, res) => {
 
     res.json(user);
   } catch (err) {
-    console.error("Get profile error:", err.message);
+    console.error("Get profile error:", err);
     res.status(500).json({ message: "Server error while fetching profile" });
   }
 };
 
 /**
- * Update Profile (secure)
+ * Update Profile
  */
 export const updateProfile = async (req, res) => {
   try {
-    // Validate with central schema
     const { error, value } = profileUpdateSchema.validate(req.body, {
       abortEarly: false,
     });
@@ -231,23 +221,13 @@ export const updateProfile = async (req, res) => {
     }
 
     const { username, password, phone, address } = value;
-
-    // Fetch the logged-in user
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Update allowed fields
     if (username) user.username = username;
     if (phone) user.phone = phone;
-    if (address) {
-      user.address = {
-        ...user.address,
-        ...address, // partial update supported
-      };
-    }
-    if (password) {
-      user.password = password; // hashed via pre-save hook
-    }
+    if (address) user.address = { ...user.address, ...address };
+    if (password) user.password = password;
 
     await user.save();
 
@@ -256,7 +236,10 @@ export const updateProfile = async (req, res) => {
       user: user.toJSON(),
     });
   } catch (err) {
-    console.error("Update profile error:", err.message);
+    console.error("Update profile error:", err);
+
+    if (handleDuplicateKeyError(err, res)) return;
+
     res
       .status(500)
       .json({ message: "Server error while updating profile" });
