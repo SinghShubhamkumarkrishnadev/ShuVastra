@@ -1,10 +1,11 @@
-//src/middleware/authMiddleware.js
+// src/middlewares/authMiddleware.js
 import { verifyToken } from "../utils/token.js";
 import User from "../models/User.js";
 import Admin from "../models/Admin.js";
 
 /**
  * Verify JWT token and attach user/admin to req.user
+ * @param {Array} roles - Allowed roles, e.g. ["user"], ["admin"], ["user", "admin"]
  */
 export const authMiddleware = (roles = []) => {
   return async (req, res, next) => {
@@ -15,14 +16,14 @@ export const authMiddleware = (roles = []) => {
       }
 
       const token = authHeader.split(" ")[1];
-      const decoded = verifyToken(token);
-
-      if (!decoded) {
+      let decoded;
+      try {
+        decoded = verifyToken(token);
+      } catch (err) {
         return res.status(401).json({ message: "Invalid or expired token" });
       }
 
       let entity = null;
-
       if (decoded.role === "user") {
         entity = await User.findById(decoded.id);
       } else if (decoded.role === "admin") {
@@ -34,11 +35,14 @@ export const authMiddleware = (roles = []) => {
       }
 
       // If specific roles are required
-      if (roles.length && !roles.includes(entity.role)) {
-        return res.status(403).json({ message: "Forbidden: insufficient role" });
+      if (roles.length && !roles.includes(decoded.role)) {
+        return res
+          .status(403)
+          .json({ message: "Forbidden: insufficient role" });
       }
 
       req.user = entity;
+      req.userRole = decoded.role; // attach role explicitly for clarity
       next();
     } catch (err) {
       console.error("Auth error:", err.message);

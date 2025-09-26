@@ -1,3 +1,4 @@
+// FILE: src/utils/validators.js
 import Joi from "joi";
 
 /**
@@ -6,16 +7,12 @@ import Joi from "joi";
  * - letters, numbers, underscores only
  */
 export const usernameSchema = Joi.string()
-  .alphanum()
-  .min(3)
-  .max(30)
+  .pattern(/^[a-zA-Z0-9_]{3,30}$/)
   .required()
   .messages({
-    "string.base": "Username must be a string",
     "string.empty": "Username is required",
-    "string.alphanum": "Username can only contain letters and numbers",
-    "string.min": "Username must be at least 3 characters",
-    "string.max": "Username cannot exceed 30 characters",
+    "string.pattern.base":
+      "Username can only contain letters, numbers, and underscores (3–30 chars)",
     "any.required": "Username is required",
   });
 
@@ -26,7 +23,7 @@ export const usernameSchema = Joi.string()
  */
 export const passwordSchema = Joi.string()
   .min(8)
-  .pattern(new RegExp("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&]).+$"))
+  .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).+$/)
   .required()
   .messages({
     "string.base": "Password must be a string",
@@ -50,7 +47,6 @@ export const phoneSchema = Joi.string()
       "Phone number must be a valid Indian mobile number (10 digits, starting with 6-9, e.g., 9876543210 or +919876543210)",
   });
 
-
 /**
  * Address validation
  */
@@ -66,8 +62,8 @@ export const addressSchema = Joi.object({
   state: Joi.string().min(2).max(50).required().messages({
     "string.empty": "State is required",
   }),
-  postalCode: Joi.string().pattern(/^\d{4,10}$/).required().messages({
-    "string.pattern.base": "Postal code must be 4–10 digits",
+  postalCode: Joi.string().pattern(/^\d{6}$/).required().messages({
+    "string.pattern.base": "Postal code must be exactly 6 digits",
     "string.empty": "Postal code is required",
   }),
   country: Joi.string().min(2).max(50).required().messages({
@@ -83,5 +79,8 @@ export const profileUpdateSchema = Joi.object({
   username: usernameSchema.optional(),
   password: passwordSchema.optional(),
   phone: phoneSchema.optional(),
+  email: Joi.string().email().optional().messages({
+    "string.email": "Email must be a valid email address",
+  }),
   address: addressSchema.optional(),
 });

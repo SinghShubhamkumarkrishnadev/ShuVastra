@@ -1,12 +1,20 @@
+// src/utils/emailTemplates.js
+
 /**
  * Generate OTP Email Template
  * @param {object} options
  * @param {string} options.username - Recipient name
  * @param {string} options.otp - OTP code
  * @param {string} options.purpose - Purpose of OTP (login, register, password_reset)
+ * @param {number} [options.expiryMinutes=5] - Expiry time in minutes
  * @returns {object} { subject, html }
  */
-export const generateOtpEmailTemplate = ({ username = "User", otp, purpose }) => {
+export const generateOtpEmailTemplate = ({
+  username = "User",
+  otp,
+  purpose,
+  expiryMinutes = 5,
+}) => {
   let subject;
   let intro;
 
@@ -31,7 +39,10 @@ export const generateOtpEmailTemplate = ({ username = "User", otp, purpose }) =>
       <p>${intro}</p>
       <p>Please use the verification code below:</p>
       <h2 style="text-align: center; color: #2F4F4F; letter-spacing: 3px;">${otp}</h2>
-      <p style="text-align: center; color: #888;">This code will expire in <b>5 minutes</b>. Please do not share it with anyone.</p>
+      <p style="text-align: center; color: #888;">
+        This code will expire in <b>${expiryMinutes} minutes</b>. 
+        Please do not share it with anyone.
+      </p>
       <br>
       <p>If you did not request this, you can safely ignore this email.</p>
       <br>

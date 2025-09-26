@@ -1,15 +1,19 @@
+// src/models/Otp.js
 import mongoose from "mongoose";
 
 const { Schema, model } = mongoose;
 
-// Max allowed invalid OTP attempts
+// Max allowed invalid OTP attempts (wrong OTP submissions)
 const MAX_ATTEMPTS = 5;
+// Max allowed resends for the same OTP flow
+const MAX_RESENDS = 5;
 
 /**
  * OTP model for both user registration and admin login.
  * - hashedOtp: store a hashed OTP (you should hash OTP before saving).
  * - purpose: 'register' for user registration OTPs, 'login' for admin login OTPs (and future password resets).
  * - attempts: count of failed verification attempts (you can lock or remove after N attempts).
+ * - resendCount: how many times this OTP has been resent (limit abuse of resending).
  * - expiresAt: used to auto-delete the OTP document via TTL index.
  */
 const OtpSchema = new Schema(
@@ -32,7 +36,11 @@ const OtpSchema = new Schema(
     },
     attempts: {
       type: Number,
-      default: 0,
+      default: 0, // failed verification attempts
+    },
+    resendCount: {
+      type: Number,
+      default: 0, // how many times OTP has been resent
     },
     // optional metadata
     meta: {
@@ -62,6 +70,21 @@ OtpSchema.methods.incrementAttempts = async function () {
 
   if (this.attempts >= MAX_ATTEMPTS) {
     // Delete OTP after too many failed attempts
+    await this.deleteOne();
+    return false; // means locked/deleted
+  }
+  return true; // still valid
+};
+
+/**
+ * Increment resend counter and check if max resends exceeded
+ */
+OtpSchema.methods.incrementResend = async function () {
+  this.resendCount += 1;
+  await this.save();
+
+  if (this.resendCount >= MAX_RESENDS) {
+    // Delete OTP after too many resends
     await this.deleteOne();
     return false; // means locked/deleted
   }

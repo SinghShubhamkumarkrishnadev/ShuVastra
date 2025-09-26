@@ -1,3 +1,4 @@
+// src/controllers/adminAuthController.js
 import Admin from "../models/Admin.js";
 import { generateToken } from "../utils/token.js";
 import Joi from "joi";
@@ -40,19 +41,23 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
 
     // Create new OTP
-    const { blocked } = await createOrResendOtp({
+    const { blocked, resendsLeft } = await createOrResendOtp({
       email,
       purpose: "login",
       username: admin.name,
     });
 
     if (blocked) {
-      return res
-        .status(429)
-        .json({ message: "Too many attempts. Try again later." });
+      return res.status(429).json({
+        message: "Too many attempts or resends. Try again later.",
+        resendsLeft,
+      });
     }
 
-    res.json({ message: "OTP sent to admin email. Please verify." });
+    res.json({
+      message: "OTP sent to admin email. Please verify.",
+      resendsLeft,
+    });
   } catch (err) {
     console.error("Admin login error:", err.message);
     res.status(500).json({ message: "Server error" });
@@ -100,7 +105,7 @@ export const resendOtp = async (req, res) => {
     const admin = await Admin.findOne({ email });
     if (!admin) return res.status(400).json({ message: "Admin not found" });
 
-    const { attemptsLeft, blocked } = await createOrResendOtp({
+    const { attemptsLeft, resendsLeft, blocked } = await createOrResendOtp({
       email,
       purpose: "login",
       username: admin.name,
@@ -108,12 +113,18 @@ export const resendOtp = async (req, res) => {
 
     if (blocked) {
       return res.status(429).json({
-        message: "Too many invalid attempts. OTP cannot be resent.",
-        attemptsLeft: 0,
+        message:
+          "Too many invalid attempts or OTP resends. Please try again later.",
+        attemptsLeft,
+        resendsLeft,
       });
     }
 
-    res.json({ message: "OTP resent successfully", attemptsLeft });
+    res.json({
+      message: "OTP resent successfully",
+      attemptsLeft,
+      resendsLeft,
+    });
   } catch (err) {
     console.error("Resend Admin OTP error:", err.message);
     res.status(500).json({ message: "Server error" });

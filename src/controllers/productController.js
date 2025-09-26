@@ -1,11 +1,13 @@
 // FILE: src/controllers/productController.js
 import Product from "../models/Product.js";
-import { validateCreateProduct, validateUpdateProduct } from "../utils/productValidation.js";
+import {
+  validateCreateProduct,
+  validateUpdateProduct,
+} from "../utils/productValidation.js";
 
 // Utility to format Joi errors
-const formatValidationError = (error) => {
-  return error.details.map((err) => err.message);
-};
+const formatValidationError = (error) =>
+  error.details.map((err) => err.message);
 
 // ✅ Create Product
 export const createProduct = async (req, res) => {
@@ -13,7 +15,9 @@ export const createProduct = async (req, res) => {
     // Validate request body
     const { error, value } = validateCreateProduct(req.body);
     if (error) {
-      return res.status(400).json({ success: false, errors: formatValidationError(error) });
+      return res
+        .status(400)
+        .json({ success: false, errors: formatValidationError(error) });
     }
 
     // Auto-generate slug if not provided
@@ -30,6 +34,14 @@ export const createProduct = async (req, res) => {
       data: product,
     });
   } catch (err) {
+    if (err.code === 11000) {
+      // Duplicate key error (slug or SKU)
+      const field = Object.keys(err.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        message: `Duplicate value for ${field}. Please use another one.`,
+      });
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -38,16 +50,16 @@ export const createProduct = async (req, res) => {
 export const getAllProducts = async (req, res) => {
   try {
     const {
-      search,        // keyword search
-      category,      // filter by category
-      subCategory,   // filter by subcategory
-      tags,          // filter by multiple tags (comma-separated)
-      minPrice,      // price >= minPrice
-      maxPrice,      // price <= maxPrice
-      sortBy,        // field to sort (price, createdAt, name, finalPrice)
-      sortOrder,     // asc | desc
-      page = 1,      // pagination page
-      limit = 10,    // results per page
+      search,
+      category,
+      subCategory,
+      tags,
+      minPrice,
+      maxPrice,
+      sortBy,
+      sortOrder,
+      page = 1,
+      limit = 10,
     } = req.query;
 
     const query = {};
@@ -63,7 +75,7 @@ export const getAllProducts = async (req, res) => {
     // 🏷 Subcategory filter
     if (subCategory) query.subCategory = subCategory;
 
-    // 🏷 Tags filter (supports multiple tags: ?tags=casual,summer)
+    // 🏷 Tags filter
     if (tags) {
       const tagsArray = tags.split(",").map((tag) => tag.trim().toLowerCase());
       query.tags = { $in: tagsArray };
@@ -82,13 +94,12 @@ export const getAllProducts = async (req, res) => {
     const skip = (pageNumber - 1) * limitNumber;
 
     // ↕ Sorting setup
-    let sort = { createdAt: -1 }; // default: newest first
+    let sort = { createdAt: -1 }; // default
     if (sortBy) {
       const order = sortOrder === "asc" ? 1 : -1;
       sort = { [sortBy]: order };
     }
 
-    // Query DB
     const [products, total] = await Promise.all([
       Product.find(query).sort(sort).skip(skip).limit(limitNumber),
       Product.countDocuments(query),
@@ -111,7 +122,24 @@ export const getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+    res.status(200).json({ success: true, data: product });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ✅ Get Single Product by Slug
+export const getProductBySlug = async (req, res) => {
+  try {
+    const product = await Product.findOne({ slug: req.params.slug });
+    if (!product) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
     res.status(200).json({ success: true, data: product });
   } catch (err) {
@@ -125,7 +153,9 @@ export const updateProduct = async (req, res) => {
     // Validate request body
     const { error, value } = validateUpdateProduct(req.body);
     if (error) {
-      return res.status(400).json({ success: false, errors: formatValidationError(error) });
+      return res
+        .status(400)
+        .json({ success: false, errors: formatValidationError(error) });
     }
 
     if (value.slug) {
@@ -138,7 +168,9 @@ export const updateProduct = async (req, res) => {
     });
 
     if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
 
     res.status(200).json({
@@ -147,6 +179,13 @@ export const updateProduct = async (req, res) => {
       data: product,
     });
   } catch (err) {
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        message: `Duplicate value for ${field}. Please use another one.`,
+      });
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -155,9 +194,10 @@ export const updateProduct = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
-
     if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
 
     res.status(200).json({

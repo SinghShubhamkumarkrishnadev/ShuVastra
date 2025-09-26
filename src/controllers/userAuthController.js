@@ -1,3 +1,4 @@
+// src/controllers/userAuthController.js
 import User from "../models/User.js";
 import { generateToken } from "../utils/token.js";
 import {
@@ -60,7 +61,7 @@ export const register = async (req, res) => {
     user.password = password; // virtual setter for hashing
     await user.save();
 
-    const { blocked } = await createOrResendOtp({
+    const { blocked, resendsLeft } = await createOrResendOtp({
       email,
       purpose: "register",
       username,
@@ -68,13 +69,15 @@ export const register = async (req, res) => {
 
     if (blocked) {
       return res.status(429).json({
-        message: "Too many attempts. Try again later.",
+        message: "Too many attempts or resends. Try again later.",
+        resendsLeft,
       });
     }
 
     return res.status(201).json({
       message:
         "User registered successfully. Please check your email for the OTP.",
+      resendsLeft,
     });
   } catch (err) {
     console.error("Register error:", err);
@@ -139,7 +142,7 @@ export const resendOtp = async (req, res) => {
     if (user.isVerified)
       return res.status(400).json({ message: "User already verified" });
 
-    const { attemptsLeft, blocked } = await createOrResendOtp({
+    const { attemptsLeft, resendsLeft, blocked } = await createOrResendOtp({
       email,
       purpose: "register",
       username: user.username,
@@ -147,12 +150,18 @@ export const resendOtp = async (req, res) => {
 
     if (blocked) {
       return res.status(429).json({
-        message: "Too many invalid attempts. OTP cannot be resent.",
-        attemptsLeft: 0,
+        message:
+          "Too many invalid attempts or OTP resends. Please try again later.",
+        attemptsLeft,
+        resendsLeft,
       });
     }
 
-    return res.json({ message: "OTP resent successfully", attemptsLeft });
+    return res.json({
+      message: "OTP resent successfully",
+      attemptsLeft,
+      resendsLeft,
+    });
   } catch (err) {
     console.error("Resend OTP error:", err);
     return res.status(500).json({

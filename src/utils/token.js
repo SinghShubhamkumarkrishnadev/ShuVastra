@@ -1,14 +1,19 @@
+// src/utils/token.js
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "changeme";
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
+
+if (!JWT_SECRET) {
+  throw new Error("❌ Missing JWT_SECRET in environment variables");
+}
 
 /**
  * Generate JWT
- * @param {Object} payload - user or admin data
+ * @param {Object} payload - must include at least { id, role }
  * @param {string} expiresIn - custom expiration (default from .env)
  */
 export const generateToken = (payload, expiresIn = JWT_EXPIRES_IN) => {
@@ -18,12 +23,9 @@ export const generateToken = (payload, expiresIn = JWT_EXPIRES_IN) => {
 /**
  * Verify JWT
  * @param {string} token
- * @returns decoded payload or null
+ * @returns decoded payload if valid
+ * @throws jwt.JsonWebTokenError | jwt.TokenExpiredError
  */
 export const verifyToken = (token) => {
-  try {
-    return jwt.verify(token, JWT_SECRET);
-  } catch (err) {
-    return null;
-  }
+  return jwt.verify(token, JWT_SECRET);
 };
