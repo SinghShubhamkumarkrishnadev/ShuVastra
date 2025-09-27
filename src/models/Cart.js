@@ -1,4 +1,3 @@
-// File: src/models/Cart.js
 import mongoose from "mongoose";
 import Product from "./Product.js";
 
@@ -46,21 +45,30 @@ CartSchema.pre("save", function (next) {
 CartSchema.methods.cleanupItems = async function () {
   let changed = false;
 
+  const productIds = [...new Set(this.items.map(i => String(i.product)))];
+  if (productIds.length === 0) return this;
+
+  const products = await Product.find({ _id: { $in: productIds } }).lean();
+  const productMap = new Map(products.map(p => [String(p._id), p]));
+
   for (let i = this.items.length - 1; i >= 0; i--) {
     const item = this.items[i];
-    const product = await Product.findById(item.product);
+    const product = productMap.get(String(item.product));
 
-    // product missing → remove
     if (!product) {
       this.items.splice(i, 1);
       changed = true;
       continue;
     }
 
-    // variant missing → remove
-    if (item.variantId && !product.variants.id(item.variantId)) {
-      this.items.splice(i, 1);
-      changed = true;
+    if (item.variantId) {
+      const hasVariant = (product.variants || []).some(
+        v => String(v._id) === String(item.variantId)
+      );
+      if (!hasVariant) {
+        this.items.splice(i, 1);
+        changed = true;
+      }
     }
   }
 
@@ -70,13 +78,20 @@ CartSchema.methods.cleanupItems = async function () {
   return this;
 };
 
-// 🔹 Get or create cart for a user
+// 🔹 Get or create cart for a user (handles race conditions)
 CartSchema.statics.getOrCreate = async function (userId) {
   let cart = await this.findOne({ user: userId });
-  if (!cart) {
-    cart = await this.create({ user: userId, items: [], totalPrice: 0 });
+  if (cart) return cart;
+
+  try {
+    return await this.create({ user: userId, items: [], totalPrice: 0 });
+  } catch (err) {
+    if (err.code === 11000) {
+      // duplicate key => another request created the cart
+      return this.findOne({ user: userId });
+    }
+    throw err;
   }
-  return cart;
 };
 
 const Cart = model("Cart", CartSchema);

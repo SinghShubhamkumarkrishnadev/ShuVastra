@@ -1,9 +1,9 @@
-// FILE: src/routes/productRoutes.js
 import express from "express";
 import {
   createProduct,
   getAllProducts,
   getProductById,
+  getProductBySlug,
   updateProduct,
   deleteProduct,
 } from "../controllers/productController.js";
@@ -15,8 +15,9 @@ const router = express.Router();
 /**
  * Public Routes
  */
-router.get("/", getAllProducts); // anyone can browse all products
-router.get("/:id", getProductById); // anyone can view single product
+router.get("/", getAllProducts);                // anyone can browse all products
+router.get("/slug/:slug", getProductBySlug);    // get by slug (cleaner & avoids clash with id)
+router.get("/:id", getProductById);             // get by MongoDB ID
 
 /**
  * Admin-only Routes

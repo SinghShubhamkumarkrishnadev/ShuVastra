@@ -5,24 +5,39 @@ import {
   validateUpdateProduct,
 } from "../utils/productValidation.js";
 
-// Utility to format Joi errors
+/**
+ * Utility: format Joi errors
+ */
 const formatValidationError = (error) =>
   error.details.map((err) => err.message);
+
+/**
+ * Utility: safe slugify (mirror Product model logic)
+ */
+function slugify(text = "") {
+  return text
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 // ✅ Create Product
 export const createProduct = async (req, res) => {
   try {
-    // Validate request body
     const { error, value } = validateCreateProduct(req.body);
     if (error) {
-      return res
-        .status(400)
-        .json({ success: false, errors: formatValidationError(error) });
+      return res.status(400).json({
+        success: false,
+        errors: formatValidationError(error),
+      });
     }
 
     // Auto-generate slug if not provided
-    if (!value.slug) {
-      value.slug = value.name.toLowerCase().replace(/\s+/g, "-");
+    if (!value.slug && value.name) {
+      value.slug = slugify(value.name);
     }
 
     const product = new Product(value);
@@ -35,7 +50,7 @@ export const createProduct = async (req, res) => {
     });
   } catch (err) {
     if (err.code === 11000) {
-      // Duplicate key error (slug or SKU)
+      // Duplicate key error
       const field = Object.keys(err.keyValue)[0];
       return res.status(400).json({
         success: false,
@@ -64,37 +79,32 @@ export const getAllProducts = async (req, res) => {
 
     const query = {};
 
-    // 🔍 Search (MongoDB text index or regex fallback)
+    // 🔍 Search
     if (search) {
       query.$text = { $search: search };
     }
 
-    // 🏷 Category filter
     if (category) query.category = category;
-
-    // 🏷 Subcategory filter
     if (subCategory) query.subCategory = subCategory;
 
-    // 🏷 Tags filter
     if (tags) {
-      const tagsArray = tags.split(",").map((tag) => tag.trim().toLowerCase());
+      const tagsArray = tags.split(",").map((t) => t.trim().toLowerCase());
       query.tags = { $in: tagsArray };
     }
 
-    // 💰 Price range filter
     if (minPrice || maxPrice) {
       query.finalPrice = {};
       if (minPrice) query.finalPrice.$gte = Number(minPrice);
       if (maxPrice) query.finalPrice.$lte = Number(maxPrice);
     }
 
-    // 📄 Pagination setup
+    // Pagination
     const pageNumber = parseInt(page, 10) || 1;
     const limitNumber = parseInt(limit, 10) || 10;
     const skip = (pageNumber - 1) * limitNumber;
 
-    // ↕ Sorting setup
-    let sort = { createdAt: -1 }; // default
+    // Sorting
+    let sort = { createdAt: -1 };
     if (sortBy) {
       const order = sortOrder === "asc" ? 1 : -1;
       sort = { [sortBy]: order };
@@ -150,16 +160,16 @@ export const getProductBySlug = async (req, res) => {
 // ✅ Update Product
 export const updateProduct = async (req, res) => {
   try {
-    // Validate request body
     const { error, value } = validateUpdateProduct(req.body);
     if (error) {
-      return res
-        .status(400)
-        .json({ success: false, errors: formatValidationError(error) });
+      return res.status(400).json({
+        success: false,
+        errors: formatValidationError(error),
+      });
     }
 
     if (value.slug) {
-      value.slug = value.slug.toLowerCase().replace(/\s+/g, "-");
+      value.slug = slugify(value.slug);
     }
 
     const product = await Product.findByIdAndUpdate(req.params.id, value, {
