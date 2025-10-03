@@ -220,6 +220,7 @@ export const updateProfile = async (req, res) => {
   try {
     const { error, value } = profileUpdateSchema.validate(req.body, {
       abortEarly: false,
+      stripUnknown: true,
     });
 
     if (error) {

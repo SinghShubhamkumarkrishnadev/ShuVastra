@@ -52,8 +52,8 @@ export const phoneSchema = Joi.string()
  */
 export const addressSchema = Joi.object({
   street: Joi.string().min(3).max(100).required().messages({
-    "string.empty": "Street is required",
-    "string.min": "Street must be at least 3 characters",
+    "string.empty": "Full street details is required. (Room No., Building Name, Area(Village/Town))",
+    "string.min": "Full street details must be at least 3 characters",
   }),
   city: Joi.string().min(2).max(50).required().messages({
     "string.empty": "City is required",
@@ -63,7 +63,7 @@ export const addressSchema = Joi.object({
     "string.empty": "State is required",
   }),
   postalCode: Joi.string().pattern(/^\d{6}$/).required().messages({
-    "string.pattern.base": "Postal code must be exactly 6 digits",
+    "string.pattern.base": "Postal code must be exactly 6 digits.",
     "string.empty": "Postal code is required",
   }),
   country: Joi.string().min(2).max(50).required().messages({

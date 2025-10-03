@@ -6,16 +6,13 @@ const { Schema, model } = mongoose;
 const OrderItemSchema = new Schema(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
-    productName: { type: String, required: true }, // snapshot
-    sku: { type: String },
-    variantId: { type: Schema.Types.ObjectId }, // snapshot link to variant if any
-    variantSnapshot: {
-      size: { type: String },
-      color: { name: String, hexCode: String },
-    },
+
+    productName: { type: String, required: true },
+    sku: { type: String }, 
+    size: { type: String },
     quantity: { type: Number, required: true, min: 1 },
-    price: { type: Number, required: true }, // snapshot price per item
-    lineTotal: { type: Number, required: true }, // price * quantity
+    price: { type: Number, required: true },
+    lineTotal: { type: Number, required: true }, 
   },
   { _id: false }
 );

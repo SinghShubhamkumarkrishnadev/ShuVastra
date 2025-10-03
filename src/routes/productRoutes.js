@@ -1,3 +1,4 @@
+// FILE: src/routes/productRoutes.js
 import express from "express";
 import {
   createProduct,
@@ -6,24 +7,52 @@ import {
   getProductBySlug,
   updateProduct,
   deleteProduct,
+  addReview,
+  getReviews,
+  updateReview,
+  deleteReview,
+  getProductSuggestions,
 } from "../controllers/productController.js";
-
+import { optionalAuth } from "../middlewares/optionalAuth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
 /**
- * Public Routes
+ * Public Product Routes
  */
-router.get("/", getAllProducts);                // anyone can browse all products
-router.get("/slug/:slug", getProductBySlug);    // get by slug (cleaner & avoids clash with id)
-router.get("/:id", getProductById);             // get by MongoDB ID
+router.get("/", optionalAuth, getAllProducts);                  // list all products
+router.get("/slug/:slug", optionalAuth, getProductBySlug);      // SEO-friendly slug lookup
+router.get("/suggestions", optionalAuth, getProductSuggestions);
+router.get("/:productId", getProductById);        // lookup by MongoDB ObjectId
 
 /**
- * Admin-only Routes
+ * Review Routes
+ */
+router.get("/:productId/reviews", getReviews);    // public: read reviews
+
+// auth required for write ops
+router.post(
+  "/:productId/reviews",
+  authMiddleware(["user", "admin"]),
+  addReview
+);
+router.put(
+  "/:productId/reviews/:reviewId",
+  authMiddleware(["user", "admin"]),
+  updateReview
+);
+router.delete(
+  "/:productId/reviews/:reviewId",
+  authMiddleware(["user", "admin"]),
+  deleteReview
+);
+
+/**
+ * Admin-only Product Routes
  */
 router.post("/", authMiddleware(["admin"]), createProduct);
-router.put("/:id", authMiddleware(["admin"]), updateProduct);
-router.delete("/:id", authMiddleware(["admin"]), deleteProduct);
+router.put("/:productId", authMiddleware(["admin"]), updateProduct);
+router.delete("/:productId", authMiddleware(["admin"]), deleteProduct);
 
 export default router;

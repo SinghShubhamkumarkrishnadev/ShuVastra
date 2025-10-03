@@ -9,6 +9,7 @@ import adminAuthRoutes from "./routes/adminRoutes.js";
 import productRoutes from "./routes/productRoutes.js"; 
 import cartRoutes from "./routes/cartRoutes.js"; 
 import orderRoutes from "./routes/orderRoutes.js";
+import wishlistRoutes from "./routes/wishlistRoutes.js";
 
 const app = express();
 
@@ -18,20 +19,13 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Basic global limiter (for all routes, in addition to authLimiter on sensitive ones)
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
-  message: { message: "Too many requests, try again later." },
-});
-app.use(globalLimiter);
-
 // Routes
 app.use("/api/auth/user", userAuthRoutes);
 app.use("/api/auth/admin", adminAuthRoutes);
 app.use("/api/products", productRoutes); 
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/wishlist", wishlistRoutes);
 
 // Health check route
 app.get("/health", (req, res) => {

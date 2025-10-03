@@ -43,6 +43,9 @@ const UserSchema = new Schema(
       enum: ["user"],
       default: "user",
     },
+    wishlist: [
+      { type: Schema.Types.ObjectId, ref: "Product" }
+    ],
   },
   { timestamps: true }
 );

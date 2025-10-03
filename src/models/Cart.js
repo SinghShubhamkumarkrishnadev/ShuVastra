@@ -1,18 +1,25 @@
+// FILE: src/models/Cart.js
 import mongoose from "mongoose";
-import Product from "./Product.js";
 
 const { Schema, model } = mongoose;
 
+/** -------------------------
+ * Sub-schema: Cart Item
+ * --------------------------*/
 const CartItemSchema = new Schema(
   {
     product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
-    variantId: { type: Schema.Types.ObjectId }, // references Product.variants._id
+    size: { type: String },
     quantity: { type: Number, required: true, min: 1, default: 1 },
     price: { type: Number, required: true, default: 0 }, // snapshot price
   },
   { timestamps: true }
 );
 
+
+/** -------------------------
+ * Cart Schema
+ * --------------------------*/
 const CartSchema = new Schema(
   {
     user: {
@@ -26,6 +33,10 @@ const CartSchema = new Schema(
   },
   { timestamps: true }
 );
+
+/** -------------------------
+ * Instance Methods
+ * --------------------------*/
 
 // 🔹 Recalculate total price
 CartSchema.methods.recalculate = function () {
@@ -45,11 +56,14 @@ CartSchema.pre("save", function (next) {
 CartSchema.methods.cleanupItems = async function () {
   let changed = false;
 
-  const productIds = [...new Set(this.items.map(i => String(i.product)))];
+  const productIds = [...new Set(this.items.map((i) => String(i.product)))];
   if (productIds.length === 0) return this;
 
-  const products = await Product.find({ _id: { $in: productIds } }).lean();
-  const productMap = new Map(products.map(p => [String(p._id), p]));
+  const ProductModel =
+    mongoose.models.Product || (await import("./Product.js")).default;
+
+  const products = await ProductModel.find({ _id: { $in: productIds } }).lean();
+  const productMap = new Map(products.map((p) => [String(p._id), p]));
 
   for (let i = this.items.length - 1; i >= 0; i--) {
     const item = this.items[i];
@@ -61,14 +75,11 @@ CartSchema.methods.cleanupItems = async function () {
       continue;
     }
 
-    if (item.variantId) {
-      const hasVariant = (product.variants || []).some(
-        v => String(v._id) === String(item.variantId)
-      );
-      if (!hasVariant) {
-        this.items.splice(i, 1);
-        changed = true;
-      }
+    // check size exists
+    if (item.size && !product.sizes.includes(item.size)) {
+      this.items.splice(i, 1);
+      changed = true;
+      continue;
     }
   }
 
@@ -77,6 +88,11 @@ CartSchema.methods.cleanupItems = async function () {
   }
   return this;
 };
+
+
+/** -------------------------
+ * Statics
+ * --------------------------*/
 
 // 🔹 Get or create cart for a user (handles race conditions)
 CartSchema.statics.getOrCreate = async function (userId) {
@@ -94,5 +110,8 @@ CartSchema.statics.getOrCreate = async function (userId) {
   }
 };
 
+/** -------------------------
+ * Model Export
+ * --------------------------*/
 const Cart = model("Cart", CartSchema);
 export default Cart;
